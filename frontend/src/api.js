@@ -1,6 +1,7 @@
 import axios from "axios";
 
-const API_BASE = "http://localhost:8000";
+const API_BASE = "https://claudedashboard-production.up.railway.app";
+
 
 const api = axios.create({ baseURL: API_BASE });
 
