@@ -7,12 +7,32 @@ Exit 0 always so Claude Code is never blocked.
 
 import json
 import sys
+import os
 import urllib.request
 import urllib.error
 from datetime import datetime
 
-API_BASE = "http://localhost:8000"
-SESSION_FILE = "/home/" + __import__("os").environ.get("USER", "user") + "/.claude_dashboard_session"
+API_BASE = "https://claudedashboard-production.up.railway.app"
+SESSION_FILE = os.path.expanduser("~/.claude_dashboard_session")
+
+# Load API key from hooks/.env if not already in environment
+_ENV_FILE = os.path.join(os.path.dirname(__file__), ".env")
+if os.path.exists(_ENV_FILE):
+    with open(_ENV_FILE) as _f:
+        for _line in _f:
+            _line = _line.strip()
+            if _line and not _line.startswith("#") and "=" in _line:
+                _k, _v = _line.split("=", 1)
+                os.environ.setdefault(_k.strip(), _v.strip())
+
+API_KEY = os.environ.get("DASHBOARD_API_KEY", "")
+
+
+def _auth_headers() -> dict:
+    h = {"Content-Type": "application/json"}
+    if API_KEY:
+        h["X-API-Key"] = API_KEY
+    return h
 
 
 def _post(path: str, payload: dict) -> dict:
@@ -20,7 +40,7 @@ def _post(path: str, payload: dict) -> dict:
     req = urllib.request.Request(
         f"{API_BASE}{path}",
         data=data,
-        headers={"Content-Type": "application/json"},
+        headers=_auth_headers(),
         method="POST",
     )
     with urllib.request.urlopen(req, timeout=3) as resp:
@@ -32,7 +52,7 @@ def _patch(path: str, payload: dict) -> dict:
     req = urllib.request.Request(
         f"{API_BASE}{path}",
         data=data,
-        headers={"Content-Type": "application/json"},
+        headers=_auth_headers(),
         method="PATCH",
     )
     with urllib.request.urlopen(req, timeout=3) as resp:

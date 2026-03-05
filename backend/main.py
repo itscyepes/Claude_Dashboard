@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Optional
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy.orm import Session as DBSession
@@ -33,6 +33,20 @@ def on_startup():
 
 
 # ---------------------------------------------------------------------------
+# Auth
+# ---------------------------------------------------------------------------
+
+API_SECRET = os.getenv("API_SECRET")
+
+
+def verify_api_key(x_api_key: Optional[str] = Header(default=None)):
+    """Reject requests that don't supply the correct X-API-Key header.
+    If API_SECRET is not configured the check is skipped (backwards-compatible)."""
+    if API_SECRET and x_api_key != API_SECRET:
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
+
+
+# ---------------------------------------------------------------------------
 # Pydantic schemas
 # ---------------------------------------------------------------------------
 
@@ -44,6 +58,7 @@ class SessionCreate(BaseModel):
 class SessionUpdate(BaseModel):
     status: Optional[SessionStatus] = None
     ended_at: Optional[datetime] = None
+    last_seen_at: Optional[datetime] = None
     total_tokens: Optional[int] = None
     estimated_cost_usd: Optional[float] = None
     notes: Optional[str] = None
@@ -81,6 +96,7 @@ class SessionResponse(BaseModel):
     status: SessionStatus
     started_at: datetime
     ended_at: Optional[datetime]
+    last_seen_at: Optional[datetime]
     total_tokens: int
     estimated_cost_usd: float
     notes: Optional[str]
@@ -208,7 +224,7 @@ def get_session(session_id: int, db: DBSession = Depends(get_db)):
 
 
 @app.post("/sessions", response_model=SessionResponse, status_code=201)
-def create_session(payload: SessionCreate, db: DBSession = Depends(get_db)):
+def create_session(payload: SessionCreate, db: DBSession = Depends(get_db), _: None = Depends(verify_api_key)):
     session = Session(
         name=payload.name,
         notes=payload.notes,
@@ -222,7 +238,7 @@ def create_session(payload: SessionCreate, db: DBSession = Depends(get_db)):
 
 
 @app.patch("/sessions/{session_id}", response_model=SessionResponse)
-def update_session(session_id: int, payload: SessionUpdate, db: DBSession = Depends(get_db)):
+def update_session(session_id: int, payload: SessionUpdate, db: DBSession = Depends(get_db), _: None = Depends(verify_api_key)):
     session = db.get(Session, session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -235,8 +251,20 @@ def update_session(session_id: int, payload: SessionUpdate, db: DBSession = Depe
     return session
 
 
+@app.post("/sessions/{session_id}/ping", response_model=SessionResponse)
+def ping_session(session_id: int, db: DBSession = Depends(get_db), _: None = Depends(verify_api_key)):
+    """Touch last_seen_at — called by the UserPromptSubmit hook to keep the session alive."""
+    session = db.get(Session, session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    session.last_seen_at = datetime.utcnow()
+    db.commit()
+    db.refresh(session)
+    return session
+
+
 @app.delete("/sessions/{session_id}", status_code=204)
-def delete_session(session_id: int, db: DBSession = Depends(get_db)):
+def delete_session(session_id: int, db: DBSession = Depends(get_db), _: None = Depends(verify_api_key)):
     session = db.get(Session, session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -249,7 +277,7 @@ def delete_session(session_id: int, db: DBSession = Depends(get_db)):
 # ---------------------------------------------------------------------------
 
 @app.post("/tool-calls", response_model=ToolCallResponse, status_code=201)
-def create_tool_call(payload: ToolCallCreate, db: DBSession = Depends(get_db)):
+def create_tool_call(payload: ToolCallCreate, db: DBSession = Depends(get_db), _: None = Depends(verify_api_key)):
     session = db.get(Session, payload.session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -273,7 +301,7 @@ def create_tool_call(payload: ToolCallCreate, db: DBSession = Depends(get_db)):
 
 
 @app.patch("/tool-calls/{tool_call_id}", response_model=ToolCallResponse)
-def update_tool_call(tool_call_id: int, payload: ToolCallUpdate, db: DBSession = Depends(get_db)):
+def update_tool_call(tool_call_id: int, payload: ToolCallUpdate, db: DBSession = Depends(get_db), _: None = Depends(verify_api_key)):
     tool_call = db.get(ToolCall, tool_call_id)
     if not tool_call:
         raise HTTPException(status_code=404, detail="Tool call not found")

@@ -1,5 +1,6 @@
 # Environment
 .env
+hooks/.env
 
 # Python
 __pycache__/

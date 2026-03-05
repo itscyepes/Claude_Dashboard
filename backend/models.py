@@ -33,6 +33,7 @@ class Session(Base):
     status = Column(Enum(SessionStatus), nullable=False, default=SessionStatus.active)
     started_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     ended_at = Column(DateTime, nullable=True)
+    last_seen_at = Column(DateTime, nullable=True)
     total_tokens = Column(Integer, nullable=False, default=0)
     estimated_cost_usd = Column(Float, nullable=False, default=0.0)
     notes = Column(String, nullable=True)

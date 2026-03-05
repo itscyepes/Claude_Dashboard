@@ -16,6 +16,14 @@ Base = declarative_base()
 def init_db():
     import models  # noqa: F401 — ensures models are registered before create_all
     Base.metadata.create_all(bind=engine)
+    # Add last_seen_at column to existing DBs that pre-date the column
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("ALTER TABLE sessions ADD COLUMN last_seen_at DATETIME"))
+            conn.commit()
+        except Exception:
+            pass  # Column already exists
 
 
 def get_db():

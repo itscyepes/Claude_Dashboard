@@ -10,7 +10,7 @@ import urllib.error
 from datetime import datetime, timezone
 import os
 
-API_BASE = "http://localhost:8000"
+API_BASE = "https://claudedashboard-production.up.railway.app"
 SESSION_FILE = os.path.expanduser("~/.claude_dashboard_session")
 
 
