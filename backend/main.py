@@ -318,3 +318,8 @@ def get_stats(db: DBSession = Depends(get_db)):
         warning_count=warning_count,
         estimated_total_cost=estimated_total_cost,
     )
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("PORT", 8080))
+    uvicorn.run("main:app", host="0.0.0.0", port=port)
